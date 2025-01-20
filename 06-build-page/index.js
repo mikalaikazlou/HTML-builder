@@ -1,26 +1,25 @@
 const { join, parse } = require('path');
 const { createWriteStream, createReadStream } = require('fs');
-const { readdir, mkdir, copyFile, rmdir, rm } = require('fs/promises');
+const { readdir, mkdir, copyFile, rm,} = require('fs/promises');
 
 const targetFolder = 'project-dist';
+const copyTo = join(__dirname, targetFolder);
+const copyAccetsFrom = join(__dirname, 'assets');
+const copyAssetsTo = join(__dirname, targetFolder, 'assets');
 const copyStylesFrom = join(__dirname, 'styles');
+const componentsPath = join(__dirname, 'components');
 const pathTemplRead = join(__dirname, 'template.html');
 const pathWrite = join(__dirname, targetFolder, 'index.html');
-const componentsPath = join(__dirname, 'components');
-
 const writeStylesTo = join(__dirname, targetFolder, 'style.css');
-const writeStream = createWriteStream(writeStylesTo, { flags: 'w' });
-const copyAccetsFrom = join(__dirname, 'assets');
-const copyTo = join(__dirname, targetFolder);
 
-const copyAssetsTo = join(__dirname, targetFolder, 'assets');
+const writeStream = createWriteStream(writeStylesTo, { flags: 'w' });
 
 async function createFolder(path) {
   await mkdir(path, { recursive: true }).catch();
 }
 
 async function removeDirectory() {
-  await rm(copyAssetsTo, { recursive: true }).catch((_) => {});
+  await rm(copyAssetsTo, { recursive: true }).catch((_) => { });
 }
 
 // copy the assets folder
@@ -50,7 +49,6 @@ async function copyAssets(directory, dest) {
 }
 
 createFolder(copyTo);
-
 copyAssets(copyAccetsFrom, '');
 
 // merge styles to single file, and copy to project-dist folder
@@ -75,61 +73,36 @@ readdir(copyStylesFrom)
     console.log(err);
   });
 
-// merge styles to single file, and copy to project-dist folder
-
 async function readTemplate() {
   const readStream = await createReadStream(pathTemplRead, {
     encoding: 'utf-8',
   });
-  const writeStream = await createWriteStream(pathWrite);
-
   readStream.on('data', async (data) => {
-    const contant = data.toString().replaceAll(' ', '').replaceAll('\\n', '');
-    // const name = contant.slice(firstIndex + 2, firstIndexCl);
-    await getComponent(contant);
-    readStream.on('end', () => {
-      writeStream.close();
-    });
+    const contant = data.toString();
+    setContantsToHtml(contant);
   });
 }
 
-async function getComponent(contantText) {
-  await readdir(componentsPath, { withFileTypes: true })
-    .then(async (data) => {
-      const arrTemplates = {};
-      let contant = contantText;
-      await data.forEach(async (file) => {
-        const path = parse(join(componentsPath, file.name));
-        if (file.isFile() && path.ext === '.html') {
-          console.log(file);
-
-          let firstIndex = contant.indexOf('{{');
-          let firstIndexCl = contant.indexOf('}}');
-          const name = contant.slice(firstIndex + 2, firstIndexCl);
-
-          if (name.toUpperCase() === path.name.toUpperCase()) {
-            const contantStream = createReadStream(
-              join(componentsPath, file.name),
-              'utf-8',
-            );
-
-            contantStream.on('data', (data) => {
-              arrTemplates[path.name] = data;
-              contant =
-                contantText.slice(0, firstIndex - 2) +
-                '\n' +
-                data.toString() +
-                contantText.slice(firstIndexCl + 2);
-
-              console.log(contant);
-            });
+function setContantsToHtml(contantText) {
+  readdir(componentsPath, { withFileTypes: true })
+    .then((data) => {
+      data.forEach((file) => {
+        const readStream = createReadStream(join(componentsPath, file.name), {encoding: 'utf-8', });
+        readStream.on('data', (data) => {
+          const filePath = parse(join(copyStylesFrom, file.name));
+          const value = `{{${filePath.name}}}`;
+          if (contantText.match(value) && filePath.ext === '.html' && file.isFile()) {
+            contantText = contantText.replace(value, "\n" + data.trim());
+            const writeStrim = createWriteStream(pathWrite, { flags: 'w' });
+            writeStrim.write(contantText);
+            writeStrim.close();
           }
-        }
+        });
       });
-      console.log(arrTemplates);
     })
     .catch((err) => {
       console.log(err);
     });
 }
+
 readTemplate();
